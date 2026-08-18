@@ -1,0 +1,34 @@
+project_id = "algoria-local"
+
+[api]
+enabled = true
+port = 54421
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54422
+shadow_port = 54420
+major_version = 17
+
+[studio]
+enabled = true
+port = 54423
+
+[local_smtp]
+enabled = true
+port = 54424
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 900
+enable_signup = false
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false

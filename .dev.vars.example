@@ -1,0 +1,6 @@
+# Wrangler local runtime secrets. Copy to `.dev.vars`; never commit real values.
+SUPABASE_SECRET_KEY=
+# Verified only by Algoria. Never the Supabase project JWT secret.
+ALGORIA_JWT_SECRET=
+ALGORIA_SESSION_PEPPER=
+SEP10_SIGNING_SECRET=

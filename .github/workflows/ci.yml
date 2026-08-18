@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # `--ignore-scripts` stops the root package's `prepare` from running at
+      # install time. Worth stating what that is and is not: this job builds pull
+      # requests from forks, and the steps below already run fork-authored code by
+      # design: `pnpm check`, `pnpm test` and `pnpm build` all evaluate the fork's
+      # own config and test files. What actually contains a fork PR is that
+      # `on: pull_request` grants a read-only token and no repository secrets. The
+      # flag simply removes the one entry point that runs before anyone has read
+      # the diff. `pnpm check` runs `svelte-kit sync` itself, so nothing is lost.
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Type and framework checks
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Reject high-severity production advisories
+        run: pnpm audit --prod --audit-level high
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Same reason as the verify job. This one does need the explicit sync: it
+      # never runs `pnpm check`, so nothing else generates the types.
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate SvelteKit types
+        run: pnpm exec svelte-kit sync
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start local Supabase
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: latest
+
+      - name: Launch Supabase stack
+        run: supabase start
+
+      # Local-only test credentials from the ephemeral Supabase stack; the
+      # SEP-10 signing key is generated per run and never leaves the runner.
+      - name: Write test environment
+        run: |
+          {
+            echo "PUBLIC_SUPABASE_URL=$(supabase status -o json | jq -r .API_URL)"
+            echo "PUBLIC_SUPABASE_PUBLISHABLE_KEY=$(supabase status -o json | jq -r .PUBLISHABLE_KEY)"
+            echo "SUPABASE_SECRET_KEY=$(supabase status -o json | jq -r .SECRET_KEY)"
+            echo "ALGORIA_JWT_SECRET=$(openssl rand -hex 32)"
+            echo "ALGORIA_SESSION_PEPPER=$(openssl rand -hex 32)"
+            echo "SEP10_SIGNING_SECRET=$(node -e "const {Keypair}=require('@stellar/stellar-sdk');console.log(Keypair.random().secret())")"
+            echo "STELLAR_NETWORK=stellar:testnet"
+            echo "STELLAR_RPC_URL=https://soroban-testnet.stellar.org"
+            echo "MAX_PAYMENT_USDC=1"
+            echo "PUBLIC_APP_ORIGIN=http://127.0.0.1:5173"
+            echo "ALGORIA_ALLOWED_AGENT_IDS=13"
+          } > .env
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan Git history for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

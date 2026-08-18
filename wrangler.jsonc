@@ -1,0 +1,121 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "algoria-testnet",
+  "main": ".svelte-kit/cloudflare/_worker.js",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".svelte-kit/cloudflare"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "vars": {
+    "PUBLIC_APP_ORIGIN": "https://algoria-testnet.yamancandev.workers.dev",
+    "PUBLIC_SUPABASE_URL": "https://cocfuqpcfyftaacgpyti.supabase.co",
+    "PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Kyho-0_HFP3x7UpyfQkIbA_w3MtTxVd",
+    "PUBLIC_STELLAR_NETWORK": "stellar:testnet",
+    "STELLAR_NETWORK": "stellar:testnet",
+    "STELLAR_RPC_URL": "https://soroban-testnet.stellar.org",
+    "MAX_PAYMENT_USDC": "1",
+    "ALGORIA_ALLOWED_AGENT_IDS": "13",
+    "ALGORIA_PROVIDER_PAY_TO": "GDTIUC3BEIO47CBY3YZOLY5GIN4DOJVYIEWJXLSTZ5NE2LR47ORNBCZJ",
+    "ALGORIA_PROVIDER_AGENT_ID": "13"
+  },
+  // One deployment serves exactly one network. `algoria-testnet` stays the test
+  // harness that CI and the canary run against; `algoria-mainnet` is the product
+  // deployment and carries real value, so it ships no controlled provider of its
+  // own and routes only to operator-vetted mainnet identities.
+  //
+  // Wrangler warns that ALGORIA_PROVIDER_PAY_TO and ALGORIA_PROVIDER_AGENT_ID
+  // are absent from env.mainnet. That is the point, not an oversight: the
+  // controlled test provider exists to give the testnet harness something to
+  // pay, and mainnet must not route real USDC to a fixture.
+  //
+  // Deploy with:  pnpm build && wrangler deploy --env mainnet --env-file cloudflare.env
+  // Secrets are per-environment and must be set once:
+  //   wrangler secret put SUPABASE_SECRET_KEY --env mainnet
+  //   wrangler secret put SEP10_SIGNING_SECRET --env mainnet     (use the mainnet key, never the testnet one)
+  //   wrangler secret put ALGORIA_JWT_SECRET --env mainnet
+  //   wrangler secret put ALGORIA_SESSION_PEPPER --env mainnet
+  "env": {
+    "mainnet": {
+      "name": "algoria-mainnet",
+      // SEP-10 signs its challenge with this host as both the auth domain and
+      // the home domain, and a wallet checks that home domain against the
+      // stellar.toml served there, so the custom domain and PUBLIC_APP_ORIGIN
+      // are one change, never two. Sessions issued under the old origin stop
+      // validating at the cutover, which is correct: they attest to a different
+      // domain. Users sign in again.
+      "routes": [
+        { "pattern": "beta.algoria.chat", "custom_domain": true }
+      ],
+      "vars": {
+        "PUBLIC_APP_ORIGIN": "https://beta.algoria.chat",
+        // Both networks share one Supabase project, by decision rather than by
+        // omission. Every row carries its network, the spend ceiling is counted
+        // per network, and settlement is verified against the network's own
+        // Horizon, so a testnet record cannot raise a mainnet limit or stand in
+        // for a mainnet payment. Splitting the projects would buy blast-radius
+        // isolation, which is worth revisiting once real volume justifies it.
+        "PUBLIC_SUPABASE_URL": "https://cocfuqpcfyftaacgpyti.supabase.co",
+        "PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Kyho-0_HFP3x7UpyfQkIbA_w3MtTxVd",
+        "PUBLIC_STELLAR_NETWORK": "stellar:pubnet",
+        "STELLAR_NETWORK": "stellar:pubnet",
+        "STELLAR_RPC_URL": "https://mainnet.sorobanrpc.com",
+        "MAX_PAYMENT_USDC": "0.1",
+        // The allowlist is decided on settlement evidence, and it moves both
+        // ways as that evidence does.
+        //
+        // Agent 10 is here after being excluded. It was out while its endpoint
+        // was retired and it charged before it validated: 402 to any request,
+        // including an empty body, which the shape probe cannot tell apart from
+        // a working service. It has since re-registered on its own facilitator,
+        // settled seven payments on 2026-08-17, and become the only agent on
+        // this network that validates before charging: an empty body still gets
+        // a price, so discovery stays free, while an unknown field or a bad URL
+        // is refused outright. Its refusals therefore teach the probe something,
+        // which is the property that makes a service safe to route to.
+        //
+        // Agent 13 is out for the opposite reason. A real payment to it on
+        // 2026-08-17 was refused at settlement; its pay-to address has never
+        // received USDC, and its last on-chain activity was 2026-04-25. It
+        // validates its request shape too, and the refusal cost the payer
+        // nothing, and Algoria confirmed that against the ledger, but a service
+        // that cannot be paid is work this deployment cannot deliver. It returns
+        // when its address shows a settled payment.
+        "ALGORIA_ALLOWED_AGENT_IDS": "10,67",
+        "ALGORIA_IPFS_GATEWAY": "https://ipfs.io/ipfs/",
+        // Agent 13 declares an inputExample and it is wrong: it describes a JSON
+        // body while the endpoint accepts only a query parameter and refuses the
+        // body with 400. Preparation probes and corrects that on its own, so no
+        // override is configured for it.
+        //
+        // Agent 67 needs the other kind of help. Its registration publishes one
+        // x402 service pointing at a free catalogue of several hundred paid
+        // routes: the declared endpoint answers 200 with a price list, so a user
+        // asking for work would be handed the catalogue instead. The two routes
+        // named here are the ones the router reports as verified end to end, and
+        // both live on the origin the registration itself declares.
+        //
+        // Their inputExample is not cosmetic. Agent 67 answers 402 to every body,
+        // valid or not, so the unpaid probe can reject nothing and a wrong shape
+        // would be paid for before the router ever looked at it.
+        //
+        // The bare "67" withdraws what that registration declares. Its catalogue
+        // and health endpoints are reachable and answer 200, and they inherit a
+        // description about paying for scraping and search, so they would offer
+        // themselves for exactly the work they cannot do.
+        "ALGORIA_SERVICE_PROFILES": "{\"10\":{\"offered\":false},\"10:pulsar-scrape\":{\"endpoint\":\"https://pulsar.algoria.chat/scrape\",\"description\":\"Fetch one page with JavaScript rendering and return its content as markdown.\",\"inputExample\":{\"url\":\"https://example.com\"}},\"10:pulsar-search\":{\"endpoint\":\"https://pulsar.algoria.chat/search\",\"description\":\"Search the web and return ranked results with url, title and description.\",\"inputExample\":{\"query\":\"stellar soroban\"}},\"10:pulsar-map\":{\"endpoint\":\"https://pulsar.algoria.chat/map\",\"description\":\"List the URLs of a site as a site map.\",\"inputExample\":{\"url\":\"https://example.com\"}},\"67\":{\"offered\":false},\"67:firecrawl-scrape\":{\"endpoint\":\"https://apiserver.mpprouter.dev/v1/services/firecrawl/scrape\",\"description\":\"Scrape one URL and return its content as structured data.\",\"inputExample\":{\"url\":\"https://example.com\"}},\"67:exa-search\":{\"endpoint\":\"https://apiserver.mpprouter.dev/v1/services/exa/search\",\"description\":\"Search the web and return ranked results.\",\"inputExample\":{\"query\":\"stellar soroban\"}}}"
+      }
+    }
+  }
+}

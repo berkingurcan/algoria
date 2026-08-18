@@ -1,0 +1,27 @@
+node_modules/
+.pnpm-store/
+.svelte-kit/
+build/
+dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+cloudflare.env
+.DS_Store
+supabase/.branches/
+supabase/.temp/
+.claude/settings.local.json
+.claude/*.local.json
+/AGENTS.md
+/docs/HANDOFF.md
+/docs/agents/
+
+# Points local AI tooling at the operator's own Supabase project; not part of the product.
+.mcp.json

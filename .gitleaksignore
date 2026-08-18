@@ -1,0 +1,28 @@
+# gitleaks reads this file as a list of finding fingerprints. The entries below
+# deliberately omit the leading commit hash: gitleaks matches a fingerprint on
+# `file:rule:startline` alone, so these survive a history rewrite, which every
+# commit-qualified fingerprint does not. They are still line-numbered, so if one
+# of these lines moves the entry must be regenerated:
+#
+#   gitleaks git --report-format json --report-path leaks.json
+#
+# then take each finding's `Fingerprint` and drop everything up to the first
+# colon. Nothing here suppresses a rule globally; each line names one place.
+#
+# As of gitleaks 8.30.1 none of these entries actually fires: a scan with this
+# file removed reports no findings at all. They are kept as pre-emptive cover, so
+# that a later ruleset which does flag these two intentionally public values
+# turns CI red for a reason someone has already written down rather than for one
+# they have to rediscover. Neither value is a secret; the notes below say why.
+
+# The Supabase publishable key is an intentionally public browser credential.
+# Row Level Security is the boundary, not the secrecy of this string.
+wrangler.jsonc:generic-api-key:24
+wrangler.jsonc:generic-api-key:70
+
+# The stellar.toml route derives and emits only the SEP-10 public key. The
+# signing secret is read from the server environment and never rendered. Two
+# line numbers because an added import moved the derivation from 8 to 9, and a
+# full-history scan still meets the earlier position.
+src/routes/.well-known/stellar.toml/+server.ts:generic-api-key:8
+src/routes/.well-known/stellar.toml/+server.ts:generic-api-key:9

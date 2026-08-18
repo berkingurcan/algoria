@@ -1,0 +1,96 @@
+name: Canary
+
+on:
+  schedule:
+    # Read-only live smoke of both deployed workers, every 6 hours.
+    - cron: '17 */6 * * *'
+    # Weekly paid canary (Mondays), gated on a configured smoke wallet.
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      # Both deployments, because the one carrying real value is the one whose
+      # silence costs something. A registered agent elsewhere on this network
+      # went eighteen days with a dead payment path and nobody noticed, for the
+      # ordinary reason that nothing was watching. Read-only: no payment, so
+      # running it against mainnet costs nothing.
+      matrix:
+        include:
+          - name: testnet
+            origin: https://algoria-testnet.yamancandev.workers.dev
+            network: stellar:testnet
+          - name: mainnet
+            origin: https://beta.algoria.chat
+            network: stellar:pubnet
+    name: smoke (${{ matrix.name }})
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Read-only live smoke (health, gates, manifest, x402 challenge, recovery)
+        run: pnpm smoke -- --origin ${{ matrix.origin }} --network ${{ matrix.network }}
+
+  paid:
+    # Weekly only, and only when a funded testnet smoke wallet is configured.
+    # Spends 0.01 testnet USDC per run to prove the full payment path.
+    # Testnet only, deliberately: a canary that pays is worth running often,
+    # which is exactly the property that makes it wrong to point at real funds.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Paid canary (wallet -> prompt -> quote -> sign -> artifact + receipt)
+        env:
+          ALGORIA_SMOKE_WALLET_SECRET: ${{ secrets.ALGORIA_SMOKE_WALLET_SECRET }}
+        run: |
+          if [ -z "$ALGORIA_SMOKE_WALLET_SECRET" ]; then
+            echo "::notice::ALGORIA_SMOKE_WALLET_SECRET is not set; skipping the paid canary."
+            exit 0
+          fi
+          # Network and origin are pinned here on purpose rather than left to the
+          # script's defaults, so no change of secret or job env can ever aim a
+          # canary that spends real value at pubnet.
+          pnpm smoke -- --paid --network stellar:testnet --origin https://algoria-testnet.yamancandev.workers.dev
