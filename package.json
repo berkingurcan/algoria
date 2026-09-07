@@ -26,20 +26,20 @@
     "supabase:reset": "supabase db reset"
   },
   "dependencies": {
-    "@creit.tech/stellar-wallets-kit": "2.5.0",
-    "@lucide/svelte": "^1.31.0",
+    "@creit.tech/stellar-wallets-kit": "2.6.0",
+    "@lucide/svelte": "^1.40.0",
     "@modelcontextprotocol/client": "2.0.0",
-    "@stellar/stellar-sdk": "16.2.0",
-    "@supabase/supabase-js": "2.112.3",
+    "@stellar/stellar-sdk": "17.0.1",
+    "@supabase/supabase-js": "2.115.0",
     "@trionlabs/stellar8004": "0.0.11",
-    "@x402/core": "2.22.0",
-    "@x402/fetch": "2.22.0",
-    "@x402/stellar": "2.22.0",
+    "@x402/core": "2.25.0",
+    "@x402/fetch": "2.25.0",
+    "@x402/stellar": "2.25.0",
     "ajv": "8.20.0",
     "buffer": "6.0.3",
-    "jose": "6.2.8",
-    "undici": "8.10.0",
-    "zod": "4.4.3"
+    "jose": "6.2.10",
+    "undici": "8.10.1",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
