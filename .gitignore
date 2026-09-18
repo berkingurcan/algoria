@@ -26,5 +26,9 @@ supabase/.temp/
 # Points local AI tooling at the operator's own Supabase project; not part of the product.
 .mcp.json
 
+<<<<<<< Updated upstream
+=======
+# Generated presentation previews, exports, and slide-tool working files.
+>>>>>>> Stashed changes
 /work/
 /hackathon-pitch-speaker-notes.md
