@@ -25,3 +25,6 @@ supabase/.temp/
 
 # Points local AI tooling at the operator's own Supabase project; not part of the product.
 .mcp.json
+
+/work/
+/hackathon-pitch-speaker-notes.md
