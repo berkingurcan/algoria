@@ -39,7 +39,7 @@
     "buffer": "6.0.3",
     "jose": "6.2.8",
     "undici": "8.10.0",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
